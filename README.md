@@ -1,4 +1,4 @@
-![FreeFlowNetwork Banner](image/FFN_logo.png)
+![FreeFlowNetwork Banner](https://i.postimg.cc/q74FKqb8/FFN-logo.png)
 
 **FreeFlowNetwork** — это инновационный Telegram-бот, обеспечивающий децентрализованные финансовые операции с 
 использованием токена `$FFT`. Проект сочетает простоту интерфейса Telegram с мощью криптографических технологий,
@@ -100,7 +100,7 @@ FreeFlowNetwork использует SQLite с прагмой `journal_mode=wal`
 
 ### Новое
 
-![Img new banner](image/new_realez_banner.png)
+![Img new banner](https://i.postimg.cc/L5ytGZyt/new-realez-banner.png)
 
 В скором времени добавим поддержку экосистемы TON и blockchain алгоритмов в FreeFlow Network.
 
