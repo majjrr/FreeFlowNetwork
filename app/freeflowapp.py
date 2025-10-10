@@ -1,3 +1,30 @@
+# =============================================================================
+# FreeFlowNetwork Module - Consortium System Tools
+# 
+# Copyright (c) 2025 Stepan Belopolsky (https://t.me/majworker)
+# 
+# You are permitted to integrate, use, and modify this software in your own
+# projects, provided that:
+# 1. You do not sell, sublicense, or distribute this software or any derivatives
+#    for commercial gain.
+# 2. You do not sublicense or sell the software to third parties.
+# 3. The original copyright notice and this permission notice must be included
+#    in all copies or substantial portions of the software, including any files
+#    where this module is integrated.
+# 
+# All rights reserved. Resale, or sublicensing is strictly prohibited.
+# For commercial inquiries, contact the author.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+# =============================================================================
+
+
 import flet as ft
 from ecdsa import VerifyingKey, SECP256k1, BadSignatureError
 import time
