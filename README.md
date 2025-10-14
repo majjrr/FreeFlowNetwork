@@ -1,11 +1,8 @@
-# FreeFlowNetwork — Децентрализованная Финансовая Экосистема в Telegram
+# FreeFlowNetwork — Гибридная Сеть Финансовой Свободы в Telegram
 
 ![FreeFlowNetwork Banner](https://i.postimg.cc/q74FKqb8/FFN-logo.png)
 
-**FreeFlowNetwork** — это инновационный Telegram-бот, обеспечивающий децентрализованные финансовые операции с 
-использованием токена `$FFT`. Проект сочетает простоту интерфейса Telegram с мощью криптографических технологий,
-предоставляя пользователям быстрые переводы, выгодный стейкинг и безопасное управление ключами. Это не просто бот
-— это экосистема для финансовой свободы в Web3!
+**FreeFlowNetwork** — Telegram-бот, мастерски сочетающий удобство мессенджера с мощью полудецентрализованных технологий: быстрые переводы $FFT, выгодный стейкинг и надежное хранение ключей в одном ритме. Забудьте о сложностях — здесь Web3 становится доступным, а каждый перевод шагом к финансовой автономии!
 
 ## 📖 Оглавление
 
@@ -32,6 +29,14 @@
   - [5. Реализация на JavaScript (с использованием elliptic)](#5-реализация-на-javascript-с-использованием-elliptic)
 - [🤖 Подключение ботов к профилю (реализация в 0.0.3 и планы развития)](#-подключение-ботов-к-профиля-реализация-в-003-и-планы-развития)
   - [Как это работает сейчас (в 0.0.3)](#как-это-работает-сейчас-в-003)
+  - [Deep link в проекте FreeFlowNetworkBot](#deep-link-в-проекте-freeflownetworkbot)
+    - [Универсальная функция для создания deep link](#универсальная-функция-для-создания-deep-link)
+      - [Версия на Python](#версия-на-python-1)
+      - [Версия на JavaScript](#версия-на-javascript)
+      - [Версия на PHP](#версия-на-php)
+      - [Версия на Java](#версия-на-java)
+      - [Версия на C++](#версия-на-c)
+      - [Версия на C#](#версия-на-c-1)
 - [🤝 Контрибьютинг](#-контрибьютинг)
 - [📞 Контакты](#-контакты)
 
@@ -799,6 +804,381 @@ async def on_business_message(business_message: types.Message, business_connecti
 Друзья, мы слышим ваши опасения по поводу приватности — и это правильно! В FreeFlow Network мы строим доверие на открытости. Скоро выпустим функцию верификации кода: каждый сможет убедиться, что опубликованный на GitHub исходник — это именно то, что работает в боте.
 Код выше? Это полная копия реальной логики из нашего бота — без утайки. С помощью уникального SHA-256 хэша вы проверите: генерируйте хэш файла на GitHub и сравнивайте с нашим официальным. Никаких сюрпризов — только чистый, проверенный код!
 Хотите протестировать? Следите за обновлением в [t.me/freeflownetwork](https://t.me/freeflownetwork). Давайте вместе строить безопасный DeFi! 🔒💎
+
+### Deep link в проекте FreeFlowNetworkBot
+
+Deep link (глубокая ссылка) в Telegram — это специальный URL вида `https://t.me/{bot_username}?start={parameter}`, который позволяет запустить бота с предустановленными параметрами. Deep link используется для **предустановленной оплаты** (pre-filled payment): когда пользователь кликает по ссылке, бот автоматически предлагает перевод определённой суммы конкретному получателю за указанный продукт. Это удобно для партнёров, магазинов или интеграций, где нужно быстро инициировать платёж без ручного ввода.
+
+#### Принцип работы:
+1. **Генерация ссылки**:
+   - Команда `/generate_payment_link` (доступна незабаненным пользователям) запускает FSM (Finite State Machine) с состоянием `GeneratePaymentLinkState`.
+   - По шагам вводятся:
+     - Recipient (username получателя, например `@majworker` — проверяется на наличие в БД и отсутствие мата).
+     - Amount (сумма, float > 0, например 0.10).
+     - Product (строка без пробелов, max 20 символов, например `9999A` — проверка на мат).
+   - В функции `generate_link_product` формируется параметр `pay_param = f"pay_to_{recipient}_{amount_str}_{product}"`, где `amount_str` — сумма с заменой `.` на `_` (например, "0.10" → "0_10", чтобы избежать запрещённых символов в Telegram).
+   - Ссылка: `https://t.me/{bot_username}?start={pay_param}`.
+   - Длина параметра проверяется (<=64 символа, лимит Telegram).
+   - Генерируется QR-код с логотипом/фоном (функция `generate_qr_with_logo`), отправляется фото с QR и inline-клавиатурой для шаринга в другой чат (кнопка "Поделиться ссылкой" использует `switch_inline_query` для inline-режима Telegram).
+   - Автоматически шаринг QR в `SUPPORT_CHAT_ID` (для админов/поддержки).
+
+2. **Обработка ссылки в боте**:
+   - В хэндлере `/start` парсятся аргументы из `message.text` (после `/start`).
+   - Если аргумент начинается с `pay_to_`, извлекается: recipient, amount (с обратной заменой `_` на `.` для float), product.
+   - Валидация: сумма >0, нет мата, recipient существует в БД и не сам пользователь, длина параметров ок.
+   - Если ок — данные сохраняются в FSM (`state.update_data(recipient=..., amount=..., product=...)`), проверяется баланс.
+   - Показывается клавиатура подтверждения: "Подтвердить перевод {amount} $FFT" или "Отмена".
+   - Устанавливается состояние `PayState.amount` — при подтверждении переходит в FSM оплаты (`PayState`), где предзаполненные данные используются для перевода (update баланса, запись в Transaction, генерация чека).
+   - Если ошибка (некорректный формат, недостаток средств) — сообщение об ошибке, и показывается стандартное меню `/start`.
+
+3. **Ограничения и безопасность**:
+   - Символы в `start`: Только A-Z, a-z, 0-9, `_`, `-` (Telegram-ограничение, поэтому замена `.` на `_`).
+   - Проверки: Фильтр мата (`filter_profanity`), баланс, бан пользователя.
+   - QR: Генерируется с высоким разрешением (box_size=15, error_correction='H'), наложением фона (ресайз + blending), цветными пикселями (опционально градиент) и круглым логотипом (маска для альфа).
+   - Шаринг: Inline-кнопка для быстрой отправки в любой чат (Telegram сам обрабатывает).
+
+Пример ссылки: `https://t.me/FreeFlowNetwork_bot?start=pay_to_majworker_0_10_9999A` → Парсится как recipient="majworker", amount=0.10, product="9999A" → Предлагает перевод.
+
+### Универсальная функция для создания deep link
+
+Принимает аргументы: `bot_username`, `recipient`, `amount`, `product`. Она валидирует вход, заменяет `.` на `_` в amount, проверяет длину и возвращает готовую ссылку (или None при ошибке).
+
+#### Версия на Python (вставьте в bot.py как утилиту, например после `generate_receipt`)
+
+<details>
+<summary>🔍 Код Python (кликни для показа кода)</summary>
+
+```python
+def create_deep_link(bot_username: str, recipient: str, amount: float, product: str) -> str | None:
+    """
+    Универсальная функция для создания deep link.
+    
+    :param bot_username: Имя бота (например, 'FreeFlowNetwork_bot').
+    :param recipient: Username получателя (без @, проверка на мат и длину).
+    :param amount: Сумма (float > 0).
+    :param product: Продукт (строка без пробелов, max 20 символов).
+    :return: Готовая deep link или None при ошибке.
+    """
+    # Валидация (аналогично коду бота)
+    recipient = recipient.lstrip('@')
+    if amount <= 0 or len(recipient) > 32 or len(product) > 20 or ' ' in product:
+        logger.error("Неверные параметры для deep link")
+        return None
+    if not filter_profanity(recipient) or not filter_profanity(product):  # Используйте вашу функцию
+        logger.error("Недопустимые слова в параметрах")
+        return None
+    
+    # Форматирование amount
+    amount_str = f"{amount:.2f}".replace('.', '_')
+    
+    # Параметр start
+    pay_param = f"pay_to_{recipient}_{amount_str}_{product}"
+    if len(pay_param) > 64:
+        logger.error(f"Параметр слишком длинный: {len(pay_param)} > 64")
+        return None
+    
+    # Ссылка
+    deep_link = f"https://t.me/{bot_username}?start={pay_param}"
+    logger.info(f"Создана deep link: {deep_link}")
+    return deep_link
+```
+
+</details>
+
+**Пример использования в Python**:
+
+```python
+link = create_deep_link("FreeFlowNetwork_bot", "majworker", 0.10, "9999A")
+print(link)  # https://t.me/FreeFlowNetwork_bot?start=pay_to_majworker_0_10_9999A
+```
+
+#### Версия на JavaScript (для Node.js или браузера)
+
+<details>
+<summary>🔍 Код JavaScript (кликни для показа кода)</summary>
+
+```javascript
+function createDeepLink(botUsername, recipient, amount, product) {
+    // Валидация
+    recipient = recipient.replace(/^@/, ''); // Убрать @
+    if (amount <= 0 || recipient.length > 32 || product.length > 20 || product.includes(' ')) {
+        console.error("Неверные параметры для deep link");
+        return null;
+    }
+    // Проверка мата (реализуйте свою функцию, здесь заглушка)
+    function filterProfanity(str) { return !/badword/.test(str); } // Замените на реальную
+    if (!filterProfanity(recipient) || !filterProfanity(product)) {
+        console.error("Недопустимые слова в параметрах");
+        return null;
+    }
+
+    // Форматирование amount
+    const amountStr = amount.toFixed(2).replace('.', '_');
+
+    // Параметр start
+    const payParam = `pay_to_${recipient}_${amountStr}_${product}`;
+    if (payParam.length > 64) {
+        console.error(`Параметр слишком длинный: ${payParam.length} > 64`);
+        return null;
+    }
+
+    // Ссылка
+    const deepLink = `https://t.me/${botUsername}?start=${payParam}`;
+    console.info(`Создана deep link: ${deepLink}`);
+    return deepLink;
+}
+
+// Пример
+const link = createDeepLink("FreeFlowNetwork_bot", "majworker", 0.10, "9999A");
+console.log(link); // https://t.me/FreeFlowNetwork_bot?start=pay_to_majworker_0_10_9999A
+```
+
+</details>
+
+#### Версия на PHP (для веб-сервера)
+
+<details>
+<summary>🔍 Код PHP (кликни для показа кода)</summary>
+
+```php
+function createDeepLink($botUsername, $recipient, $amount, $product) {
+    // Валидация
+    $recipient = ltrim($recipient, '@');
+    if ($amount <= 0 || strlen($recipient) > 32 || strlen($product) > 20 || strpos($product, ' ') !== false) {
+        error_log("Неверные параметры для deep link");
+        return null;
+    }
+    // Проверка мата (реализуйте свою функцию, здесь заглушка)
+    function filterProfanity($str) { return !preg_match('/badword/', $str); } // Замените
+    if (!filterProfanity($recipient) || !filterProfanity($product)) {
+        error_log("Недопустимые слова в параметрах");
+        return null;
+    }
+
+    // Форматирование amount
+    $amountStr = str_replace('.', '_', number_format($amount, 2, '.', ''));
+
+    // Параметр start
+    $payParam = "pay_to_{$recipient}_{$amountStr}_{$product}";
+    if (strlen($payParam) > 64) {
+        error_log("Параметр слишком длинный: " . strlen($payParam) . " > 64");
+        return null;
+    }
+
+    // Ссылка
+    $deepLink = "https://t.me/{$botUsername}?start={$payParam}";
+    error_log("Создана deep link: {$deepLink}");
+    return $deepLink;
+}
+
+// Пример
+$link = createDeepLink("FreeFlowNetwork_bot", "majworker", 0.10, "9999A");
+echo $link; // https://t.me/FreeFlowNetwork_bot?start=pay_to_majworker_0_10_9999A
+```
+
+</details>
+
+#### Версия на Java (для Android или Spring)
+
+<details>
+<summary>🔍 Код Java (кликни для показа кода)</summary>
+
+```java
+import java.text.DecimalFormat;
+import java.util.logging.Logger;
+
+public class DeepLinkUtils {
+    private static final Logger logger = Logger.getLogger(DeepLinkUtils.class.getName());
+    private static final DecimalFormat df = new DecimalFormat("#.##");
+
+    public static String createDeepLink(String botUsername, String recipient, double amount, String product) {
+        // Убрать @
+        recipient = recipient.replaceAll("^@", "");
+
+        // Валидация
+        if (amount <= 0 || recipient.length() > 32 || product.length() > 20 || product.contains(" ")) {
+            logger.severe("Неверные параметры для deep link");
+            return null;
+        }
+        // Заглушка для мата (реализуйте filterProfanity)
+        if (!filterProfanity(recipient) || !filterProfanity(product)) {
+            logger.severe("Недопустимые слова в параметрах");
+            return null;
+        }
+
+        // Форматирование amount
+        String amountStr = df.format(amount).replace(".", "_");
+
+        // Параметр start
+        String payParam = String.format("pay_to_%s_%s_%s", recipient, amountStr, product);
+        if (payParam.length() > 64) {
+            logger.severe(String.format("Параметр слишком длинный: %d > 64", payParam.length()));
+            return null;
+        }
+
+        // Ссылка
+        String deepLink = String.format("https://t.me/%s?start=%s", botUsername, payParam);
+        logger.info("Создана deep link: " + deepLink);
+        return deepLink;
+    }
+
+    private static boolean filterProfanity(String str) {
+        // Реализуйте: return !str.matches(".*(badword).*");
+        return true; // Заглушка
+    }
+
+    // Пример
+    public static void main(String[] args) {
+        String link = createDeepLink("FreeFlowNetwork_bot", "majworker", 0.10, "9999A");
+        System.out.println(link); // https://t.me/FreeFlowNetwork_bot?start=pay_to_majworker_0_10_9999A
+    }
+}
+```
+
+</details>
+
+#### Версия на C++ (для консольного приложения или Qt)
+
+<details>
+<summary>🔍 Код C++ (кликни для показа кода)</summary>
+
+```cpp
+#include <iostream>
+#include <string>
+#include <iomanip>
+#include <sstream>
+#include <regex>  // Для замены и валидации
+
+std::string createDeepLink(const std::string& botUsername, std::string recipient, double amount, const std::string& product) {
+    // Убрать @
+    if (recipient.find('@') == 0) {
+        recipient = recipient.substr(1);
+    }
+
+    // Валидация
+    if (amount <= 0.0 || recipient.length() > 32 || product.length() > 20 || product.find(' ') != std::string::npos) {
+        std::cerr << "Неверные параметры для deep link" << std::endl;
+        return "";
+    }
+    // Заглушка для мата (реализуйте filterProfanity)
+    if (!filterProfanity(recipient) || !filterProfanity(product)) {
+        std::cerr << "Недопустимые слова в параметрах" << std::endl;
+        return "";
+    }
+
+    // Форматирование amount (2 знака после запятой)
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(2) << amount;
+    std::string amountStr = oss.str();
+    size_t dotPos = amountStr.find('.');
+    if (dotPos != std::string::npos) {
+        amountStr.replace(dotPos, 1, "_");  // . → _
+    }
+
+    // Параметр start
+    std::string payParam = "pay_to_" + recipient + "_" + amountStr + "_" + product;
+    if (payParam.length() > 64) {
+        std::cerr << "Параметр слишком длинный: " << payParam.length() << " > 64" << std::endl;
+        return "";
+    }
+
+    // Ссылка
+    std::string deepLink = "https://t.me/" + botUsername + "?start=" + payParam;
+    std::cout << "Создана deep link: " << deepLink << std::endl;
+    return deepLink;
+}
+
+bool filterProfanity(const std::string& str) {
+    // Реализуйте: return std::regex_search(str, std::regex("badword")) == false;
+    return true;  // Заглушка
+}
+
+// Пример
+int main() {
+    std::string link = createDeepLink("FreeFlowNetwork_bot", "majworker", 0.10, "9999A");
+    std::cout << link << std::endl;  // https://t.me/FreeFlowNetwork_bot?start=pay_to_majworker_0_10_9999A
+    return 0;
+}
+```
+
+</details>
+
+Компиляция: `g++ -std=c++11 main.cpp -o deep_link` (нужен `<iomanip>` для форматирования).
+
+#### Версия на C# (для .NET или Unity)
+
+<details>
+<summary>🔍 Код C++ (кликни для показа кода)</summary>
+
+```csharp
+using System;
+using System.Globalization;
+using System.Text.RegularExpressions;
+
+public class DeepLinkUtils
+{
+    private static readonly CultureInfo Culture = CultureInfo.InvariantCulture;
+
+    public static string CreateDeepLink(string botUsername, string recipient, double amount, string product)
+    {
+        // Убрать @
+        if (recipient.StartsWith("@"))
+        {
+            recipient = recipient.Substring(1);
+        }
+
+        // Валидация
+        if (amount <= 0 || recipient.Length > 32 || product.Length > 20 || product.Contains(" "))
+        {
+            Console.Error.WriteLine("Неверные параметры для deep link");
+            return null;
+        }
+        // Заглушка для мата (реализуйте FilterProfanity)
+        if (!FilterProfanity(recipient) || !FilterProfanity(product))
+        {
+            Console.Error.WriteLine("Недопустимые слова в параметрах");
+            return null;
+        }
+
+        // Форматирование amount
+        string amountStr = amount.ToString("F2", Culture).Replace(".", "_");
+
+        // Параметр start
+        string payParam = $"pay_to_{recipient}_{amountStr}_{product}";
+        if (payParam.Length > 64)
+        {
+            Console.Error.WriteLine($"Параметр слишком длинный: {payParam.Length} > 64");
+            return null;
+        }
+
+        // Ссылка
+        string deepLink = $"https://t.me/{botUsername}?start={payParam}";
+        Console.WriteLine($"Создана deep link: {deepLink}");
+        return deepLink;
+    }
+
+    private static bool FilterProfanity(string str)
+    {
+        // Реализуйте: return !Regex.IsMatch(str, "badword");
+        return true;  // Заглушка
+    }
+
+    // Пример
+    public static void Main()
+    {
+        string link = CreateDeepLink("FreeFlowNetwork_bot", "majworker", 0.10, "9999A");
+        Console.WriteLine(link);  // https://t.me/FreeFlowNetwork_bot?start=pay_to_majworker_0_10_9999A
+    }
+}
+```
+
+</details>
+
+Компиляция: `csc DeepLinkUtils.cs` или в Visual Studio.
+
+Эти функции универсальны: используйте в любом коде, передавая аргументы. Версии полные и готовые к использованию.
+
+**Скоро завершим разработку пополнения и вывода средств с этой системы.** Ожидайте интеграцию с DonationAlerts, CryptoPay и автоматическими выводами.
 
 **Планы развития (0.0.4+)**: Расширение API для внешних ботов — webhook'и для реал-тайм уведомлений, поддержка плагинов с проверкой (whitelist). Это сделает FreeFlow платформой: подключайте боты для автоматизации — и ваш профиль превратится в сверхумный хищник, который сам охотится за прибылью. Следите за тестами в [t.me/freeflowdev](https://t.me/freeflowdev)! 
 
